@@ -169,7 +169,6 @@ void AES_cipher(unsigned char *in, unsigned char *out, unsigned char *key){
         MixColumn(state);
         AddRoundKey(state, ExpKey+4*Nb*i);
     }
-    
     SubBytes(state);
     RowShift(state);
     AddRoundKey(state, ExpKey+4*Nb*Nr);
