@@ -78,15 +78,14 @@ void KeyExpansion(unsigned char *key, unsigned char *ExpKey){
             for(k = 0; k < 4; k++) tmp[k] = s_box[tmp[k]];
 
             /* 异或轮常数 */
-            for(k = 0; k < 4; k++) tmp[k] = tmp[k] ^ ((k == 0) ? (rcon(i%Nk)) : 0);
+            for(k = 0; k < 4; k++) tmp[k] = tmp[k] ^ ((k == 0) ? rcon(i/Nk) : 0);
         }
         else if(Nk > 6 && i%Nk == 4){
             /* sbox替换 */
             for(k = 0; k < 4; k++) tmp[k] = s_box[tmp[k]];
         }
-
         /* 和Nk前的字异或 */
-        for(j = 0; j < 4; j++) ExpKey[4*i+k] =  ExpKey[4*(i-Nk)+j] ^ tmp[j];
+        for(j = 0; j < 4; j++) ExpKey[4*i+j] =  ExpKey[4*(i-Nk)+j] ^ tmp[j];
     }
 }
 
@@ -95,12 +94,62 @@ void AddRoundKey(unsigned char *state, unsigned char *ExpKey){
     int i, j;
     for(i = 0; i < Nb; i++){
         for(j = 0; j < 4; j++){
-            state[j*4+i] ^= ExpKey[i*4+j];
+            state[j*Nb+i] ^= ExpKey[i*4+j];
         }
     }
 }
 
 /* S盒替换 */
+void SubBytes(unsigned char *state){
+    int i, j, row, col;
+    for(i = 0; i < 4; i++){
+        for(j = 0; j < Nb; j++){
+            row = state[i*Nb+j] >> 4; // 获取行
+            col = state[i*Nb+j] & 0x0f; // 获取列
+            state[i*Nb+j] = s_box[16*row+col]; // sbox替换
+        }
+    }
+}
+
+/* 行移位 */
+void RowShift(unsigned char *state){
+    int i, j, k;
+    unsigned char tmp;
+    for(i = 1; i < 4; i++){
+        for(j = i; j < 4; j++){
+            tmp = state[j*Nb+0]; //存下第一个元素
+            for(k = 0; k < Nb-1; k++) state[Nb*j+k] = state[Nb*j+k+1]; //移位
+            state[Nb*j+Nb-1] = tmp; //将第一个元素放到最后
+        }
+    }
+}
+
+/* 列混淆 */
+void MixColumn(unsigned char *state){
+    int i, j, k;
+    unsigned char tmp[4];
+    unsigned char A[] = {0x02, 0x03, 0x01, 0x01};
+    for(i = 0; i < Nb; i++){
+        for(j = 0; j < 4; j++){
+            tmp[j] = 0;
+            for(k = 0; k < 4; k++){
+                tmp[j] ^= multi(state[k*Nb+i], A[(k-j+4)%4]);
+            }
+        }
+        for(j = 0; j < 4; j++) state[j*Nb+i] = tmp[j];
+    }
+}
+
+void display(unsigned char *out){
+    int i, j;
+    for(i = 0; i < 4; i++){
+        for(j = 0; j < Nb; j++){
+            printf("0x%x ", out[Nb*i+j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
 
 /* AES加密 */
 void AES_cipher(unsigned char *in, unsigned char *out, unsigned char *key){
@@ -114,12 +163,13 @@ void AES_cipher(unsigned char *in, unsigned char *out, unsigned char *key){
         }
     }
     AddRoundKey(state, ExpKey);
-    for(i = 1; i < Nr; i++){
+    for(i = 1; i < 2; i++){
         SubBytes(state);
         RowShift(state);
         MixColumn(state);
         AddRoundKey(state, ExpKey+4*Nb*i);
     }
+    
     SubBytes(state);
     RowShift(state);
     AddRoundKey(state, ExpKey+4*Nb*Nr);
@@ -132,18 +182,19 @@ void AES_cipher(unsigned char *in, unsigned char *out, unsigned char *key){
 
 int main(){
     unsigned char in[16] = {
-        0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0
+        0x30, 0x31, 0x32, 0x33,
+        0x30, 0x31, 0x32, 0x33,
+        0x30, 0x31, 0x32, 0x33,
+        0x30, 0x31, 0x32, 0x33
     };
     unsigned char *out = (unsigned char *)malloc(16);
     unsigned char k[Nk*4] = {
-        0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0
+        0x30, 0x30, 0x30, 0x30,
+        0x30, 0x30, 0x30, 0x30,
+        0x30, 0x30, 0x30, 0x30,
+        0x32, 0x32, 0x32, 0x32
     };
     AES_cipher(in, out, k);
+    display(out);
     return 0;
 }
